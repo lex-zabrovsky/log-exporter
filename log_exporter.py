@@ -21,7 +21,7 @@ LOG_FILE_PATH = os.getenv('LOG_FILE_PATH')
 logger = get_logger(__name__)
 
 
-def process_log_file(client, logger) -> None:
+def export_log_to_opensearch(client, logger) -> None:
     '''
     Process the log file and send entries to OpenSearch in batches.
     '''
@@ -80,7 +80,6 @@ if __name__ == "__main__":
         exit(1)
     os_client = get_opensearch_client(OPENSEARCH_HOST, OPENSEARCH_PORT)
 
-    # Verify OpenSearch connection
     if not test_opensearch_connection(os_client, logger):
         exit(1)
 
@@ -89,5 +88,5 @@ if __name__ == "__main__":
         exit(1)
     create_index_if_not_exists(os_client, OPENSEARCH_INDEX, logger)
 
-    process_log_file(os_client, logger)
+    export_log_to_opensearch(os_client, logger)
     logger.info("Log exporter finished.")
