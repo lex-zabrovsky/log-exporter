@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+from datetime import datetime
 from opensearchpy import OpenSearch, RequestsHttpConnection
 from dotenv import load_dotenv
 
@@ -14,10 +15,26 @@ OPENSEARCH_INDEX = os.getenv('OPENSEARCH_INDEX')
 BATCH_SIZE = int(os.getenv('BATCH_SIZE', 100))
 LOG_FILE_PATH = os.getenv('LOG_FILE_PATH')
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format='%(asctime)s %(levelname)s %(message)s',
-)
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            'timestamp': datetime.utcfromtimestamp(record.created).isoformat() + 'Z',
+            'level': record.levelname,
+            'message': record.getMessage(),
+            'module': record.module,
+            'funcName': record.funcName,
+            'lineNo': record.lineno,
+        }
+        if record.exc_info:
+            log_record['exception'] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
+
+# Set up logger with JsonFormatter
+handler = logging.StreamHandler()
+handler.setFormatter(JsonFormatter())
+logging.basicConfig(level=LOG_LEVEL, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 
