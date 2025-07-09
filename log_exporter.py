@@ -16,9 +16,9 @@ LOG_FILE_PATH = os.getenv('LOG_FILE_PATH')
 logger = get_logger(__name__)
 
 
-def get_opensearch_client():
+def get_opensearch_client() -> OpenSearch:
     '''
-    OpenSearch Client Initialization
+    Initialize and return an OpenSearch client instance.
     '''
     # For basic auth
     # client = OpenSearch(
@@ -36,13 +36,12 @@ def get_opensearch_client():
         verify_certs = False,
         connection_class = RequestsHttpConnection
     )
-    
     return client
 
 
-def create_index_if_not_exists(client, index_name):
+def create_index_if_not_exists(client: OpenSearch, index_name: str) -> None:
     """
-    Creates the OpenSearch index with a predefined schema if it doesn't exist.
+    Create the OpenSearch index with a predefined schema if it doesn't exist.
     """
     if not client.indices.exists(index=index_name):
         logger.info(f"Index '{index_name}' does not exist. Creating it...")
@@ -72,9 +71,9 @@ def create_index_if_not_exists(client, index_name):
             exit(1)
 
 
-def process_log_file(client):
+def process_log_file(client: OpenSearch) -> None:
     '''
-    Log Processing Function
+    Process the log file and send entries to OpenSearch in batches.
     '''
     bulk_data = []
     processed_lines = 0
@@ -123,9 +122,9 @@ def process_log_file(client):
             send_to_opensearch(client, bulk_data)
 
 
-def send_to_opensearch(client, data):
+def send_to_opensearch(client: OpenSearch, data: list[dict]) -> None:
     '''
-    Send to OpenSearch Function
+    Send a batch of log entries to OpenSearch using the bulk API.
     '''
     if not data:
         return
@@ -160,6 +159,9 @@ if __name__ == "__main__":
         logger.debug("Exception details:", exc_info=True)
         exit(1)
 
+    if OPENSEARCH_INDEX is None:
+        logger.info("Error: OPENSEARCH_INDEX environment variable is not set.")
+        exit(1)
     create_index_if_not_exists(os_client, OPENSEARCH_INDEX)
 
     process_log_file(os_client)

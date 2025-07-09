@@ -2,9 +2,13 @@ import logging
 import os
 import json
 from datetime import datetime
+from typing import Optional
 
 class JsonFormatter(logging.Formatter):
-    def format(self, record):
+    """
+    Logging formatter that outputs log records as JSON objects.
+    """
+    def format(self, record: logging.LogRecord) -> str:
         log_record = {
             'timestamp': datetime.utcfromtimestamp(record.created).isoformat() + 'Z',
             'level': record.levelname,
@@ -17,9 +21,10 @@ class JsonFormatter(logging.Formatter):
             log_record['exception'] = self.formatException(record.exc_info)
         return json.dumps(log_record)
 
-def get_logger(name=None):
+def get_logger(name: Optional[str] = None) -> logging.Logger:
     """
     Returns a logger configured with the JSON formatter and log level from LOG_LEVEL env var (default INFO).
+    Ensures no duplicate handlers are added.
     """
     logger = logging.getLogger(name)
     if not logger.handlers:
