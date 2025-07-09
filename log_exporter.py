@@ -21,9 +21,46 @@ LOG_FILE_PATH = os.getenv('LOG_FILE_PATH')
 logger = get_logger(__name__)
 
 
+def yield_log_lines(file_path: str):
+    """
+    Generator that yields each non-empty line from the log file.
+    """
+    with open(file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield line
+
+
+def parse_log_line(line: str) -> dict | None:
+    """
+    Parse a log line as JSON. Returns dict if successful, None otherwise.
+    """
+    try:
+        return json.loads(line)
+    except json.JSONDecodeError:
+        logger.info(f"Error decoding JSON in line: {line}")
+        return None
+    except Exception as e:
+        logger.info(f"Unexpected error while parsing line: {line}. Error: {e}")
+        return None
+
+
+def add_to_bulk_data(bulk_data: list, log_entry: dict, index_name: str) -> None:
+    """
+    Add an OpenSearch bulk index action and the log entry to the bulk_data list.
+    """
+    bulk_data.append({
+        "index": {
+            "_index": index_name
+        }
+    })
+    bulk_data.append(log_entry)
+
+
 def export_log_to_opensearch(client, logger) -> None:
     '''
-    Process the log file and send entries to OpenSearch in batches.
+    Read the log file, parse lines, batch, and send entries to OpenSearch.
     '''
     bulk_data = []
     processed_lines = 0
@@ -33,33 +70,19 @@ def export_log_to_opensearch(client, logger) -> None:
         return
 
     try:
-        with open(LOG_FILE_PATH, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                try:
-                    log_entry = json.loads(line)
-
-                    bulk_data.append({
-                        "index": {
-                            "_index": OPENSEARCH_INDEX
-                        }
-                    })
-                    bulk_data.append(log_entry)
-                    processed_lines += 1
-
-                    if processed_lines % BATCH_SIZE == 0:
-                        logger.info(f"Processed {processed_lines} lines. Sending batch to OpenSearch...")
-                        send_to_opensearch(client, bulk_data, logger)
-                        bulk_data = []
-
-                except json.JSONDecodeError as e:
-                    logger.info(f"Error decoding JSON in line: {line}. Error: {e}")
-                except Exception as e:
-                    logger.info(f"An unexpected error occurred while processing line: {line}. Error: {e}")
-
+        if OPENSEARCH_INDEX is None:
+            logger.info("Error: OPENSEARCH_INDEX environment variable is not set.")
+            exit(1)
+        for line in yield_log_lines(LOG_FILE_PATH):
+            log_entry = parse_log_line(line)
+            if log_entry is None:
+                continue
+            add_to_bulk_data(bulk_data, log_entry, OPENSEARCH_INDEX)
+            processed_lines += 1
+            if processed_lines % BATCH_SIZE == 0:
+                logger.info(f"Processed {processed_lines} lines. Sending batch to OpenSearch...")
+                send_to_opensearch(client, bulk_data, logger)
+                bulk_data = []
     except FileNotFoundError:
         logger.info(f"Error: Log file not found at {LOG_FILE_PATH}")
         return
