@@ -40,6 +40,7 @@ The application uses environment variables for configuration. You can set them i
 - `OPENSEARCH_INDEX`  - Name of the OpenSearch index to use/create
 - `BATCH_SIZE`        - (Optional) Number of log lines to batch before sending to OpenSearch (default: `100`)
 - `LOG_FILE_PATH`     - Full path to the log file to be exported (e.g., `/path/to/your/logfile.log`)
+- `LOG_LEVEL=INFO`    - (Optional) Log level `INFO` (default) Shows high-level progress and errors, log level `DEBUG` shows detailed connection info and full OpenSearch responses.
 
 #### Example `.env` file:
 ```
@@ -48,6 +49,7 @@ OPENSEARCH_PORT=9200
 OPENSEARCH_INDEX=my-logs
 BATCH_SIZE=100
 LOG_FILE_PATH=/path/to/your/logfile.log
+LOG_LEVEL=INFO
 ```
 
 ### 4. Run the exporter

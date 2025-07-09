@@ -144,8 +144,10 @@ def send_to_opensearch(client, data):
                     logger.info(f"  Item error: {item['index']['error']}")
         else:
             logger.info(f"Successfully indexed {len(data) / 2} documents.")
+        logger.debug(f"Bulk API response: {response}")
     except Exception as e:
         logger.info(f"Failed to send data to OpenSearch: {e}")
+        logger.debug("Exception details:", exc_info=True)
 
 
 # --- Main Execution ---
@@ -157,8 +159,10 @@ if __name__ == "__main__":
     try:
         info = os_client.info()
         logger.info(f"Successfully connected to OpenSearch: {info['version']['distribution']} {info['version']['number']}")
+        logger.debug(f"OpenSearch connection info: {info}")
     except Exception as e:
         logger.info(f"Could not connect to OpenSearch. Please check configuration and network. Error: {e}")
+        logger.debug("Exception details:", exc_info=True)
         exit(1)
 
     create_index_if_not_exists(os_client, OPENSEARCH_INDEX)
