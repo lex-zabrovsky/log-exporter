@@ -21,6 +21,8 @@ BATCH_SIZE = int(os.getenv('BATCH_SIZE', 100))
 LOG_FILE_PATH = os.getenv('LOG_FILE_PATH')
 logger = get_logger(__name__)
 
+EXPORT_MODE = os.getenv('EXPORT_MODE', 'one_time').lower()
+
 
 def yield_log_lines(file_path: str):
     """
@@ -158,6 +160,100 @@ def continuous_export_log_to_opensearch(
         logger.info(f"An error occurred while tailing or reading the log file: {e}")
 
 
+def combined_export_log_to_opensearch(
+    client,
+    logger,
+    batch_size: int,
+    flush_interval: float = 5.0,
+    sleep_sec: float = 0.5
+) -> None:
+    """
+    First export all existing lines from the log file, then switch to tailing mode to export new lines as they are appended.
+    Ensures no lines are missed or duplicated.
+    """
+    if not LOG_FILE_PATH:
+        logger.info("Error: LOG_FILE_PATH environment variable is not set.")
+        return
+
+    if OPENSEARCH_INDEX is None:
+        logger.info("Error: OPENSEARCH_INDEX environment variable is not set.")
+        exit(1)
+
+    bulk_data = []
+    processed_lines = 0
+    last_flush = time.time()
+
+    try:
+        with open(LOG_FILE_PATH, 'r') as f:
+            # --- One-time export: read all existing lines ---
+            while True:
+                line = f.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                log_entry = parse_log_line(line)
+                if log_entry is None:
+                    continue
+                add_to_bulk_data(bulk_data, log_entry, OPENSEARCH_INDEX)
+                processed_lines += 1
+                now = time.time()
+                if processed_lines % batch_size == 0:
+                    logger.info(f"[Combined] Processed {processed_lines} lines (initial). Sending batch to OpenSearch...")
+                    send_to_opensearch(client, bulk_data, logger)
+                    bulk_data = []
+                    last_flush = now
+                elif bulk_data and (now - last_flush) >= flush_interval:
+                    logger.info(f"[Combined] Flush interval reached (initial). Sending {len(bulk_data) // 2} lines to OpenSearch...")
+                    send_to_opensearch(client, bulk_data, logger)
+                    bulk_data = []
+                    last_flush = now
+            # Flush any remaining data after initial export
+            if bulk_data:
+                logger.info(f"[Combined] Sending remaining {len(bulk_data) // 2} lines to OpenSearch (initial)...")
+                send_to_opensearch(client, bulk_data, logger)
+                bulk_data = []
+            logger.info(f"[Combined] Initial export complete. Switching to tailing mode at file position {f.tell()}.")
+            # --- Tailing mode: read new lines as they are appended ---
+            last_flush = time.time()
+            while True:
+                line = f.readline()
+                if line:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    log_entry = parse_log_line(line)
+                    if log_entry is None:
+                        continue
+                    add_to_bulk_data(bulk_data, log_entry, OPENSEARCH_INDEX)
+                    processed_lines += 1
+                    now = time.time()
+                    if processed_lines % batch_size == 0:
+                        logger.info(f"[Combined] Processed {processed_lines} lines (tailing). Sending batch to OpenSearch...")
+                        send_to_opensearch(client, bulk_data, logger)
+                        bulk_data = []
+                        last_flush = now
+                    elif bulk_data and (now - last_flush) >= flush_interval:
+                        logger.info(f"[Combined] Flush interval reached (tailing). Sending {len(bulk_data) // 2} lines to OpenSearch...")
+                        send_to_opensearch(client, bulk_data, logger)
+                        bulk_data = []
+                        last_flush = now
+                else:
+                    time.sleep(sleep_sec)
+                    now = time.time()
+                    if bulk_data and (now - last_flush) >= flush_interval:
+                        logger.info(f"[Combined] Flush interval reached (tailing idle). Sending {len(bulk_data) // 2} lines to OpenSearch...")
+                        send_to_opensearch(client, bulk_data, logger)
+                        bulk_data = []
+                        last_flush = now
+    except FileNotFoundError:
+        logger.info(f"Error: Log file not found at {LOG_FILE_PATH}")
+        return
+    except Exception as e:
+        logger.info(f"An error occurred in combined export: {e}")
+
+
 # --- Main Execution ---
 if __name__ == "__main__":
     logger.info("Starting OpenSearch log exporter...")
@@ -174,6 +270,14 @@ if __name__ == "__main__":
         exit(1)
     create_index_if_not_exists(os_client, OPENSEARCH_INDEX, logger)
 
-    #export_log_to_opensearch(os_client, logger)
-    continuous_export_log_to_opensearch(os_client, logger, BATCH_SIZE)
+    logger.info(f"EXPORT_MODE set to '{EXPORT_MODE}'")
+    if EXPORT_MODE == 'one_time':
+        export_log_to_opensearch(os_client, logger)
+    elif EXPORT_MODE == 'continuous':
+        continuous_export_log_to_opensearch(os_client, logger, BATCH_SIZE)
+    elif EXPORT_MODE == 'combined':
+        combined_export_log_to_opensearch(os_client, logger, BATCH_SIZE)
+    else:
+        logger.info(f"Error: Unknown EXPORT_MODE '{EXPORT_MODE}'. Valid options are 'one_time', 'continuous', 'combined'.")
+        exit(1)
     logger.info("Log exporter finished.")
