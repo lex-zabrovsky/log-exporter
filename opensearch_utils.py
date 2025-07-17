@@ -27,15 +27,15 @@ def create_index_if_not_exists(client: OpenSearch, index_name: str, logger: Logg
                 body={
                     "mappings": {
                         "properties": {
-                            "Trace.StartTime": {"type": "date"},
-                            "Trace.SourceType": {"type": "keyword"},
-                            "Trace.Action": {"type": "keyword"},
-                            "Trace.SessionId": {"type": "keyword"},
                             "Trace.Account": {"type": "keyword"},
-                            "Trace.Type": {"type": "keyword"},
-                            "Trace.Time": {"type": "float"},
+                            "Trace.Action": {"type": "keyword"},
                             "Trace.Id": {"type": "keyword"},
                             "Trace.Parent": {"type": "keyword"},
+                            "Trace.SessionId": {"type": "keyword"},
+                            "Trace.SourceType": {"type": "keyword"},
+                            "Trace.StartTime": {"type": "date"},
+                            "Trace.Time": {"type": "float"},
+                            "Trace.Type": {"type": "keyword"},
                             "Trace.TxId": {"type": "long"}
                         }
                     }
